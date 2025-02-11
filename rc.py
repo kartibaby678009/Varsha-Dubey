@@ -8,7 +8,7 @@ HTML_FORM = '''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Auto Comment - Created by Raghu ACC Rullx</title>
+    <title>Auto Comment - Created by Raghu ACC Rullx Boy</title>
     <style>
         body { background-color: black; color: white; text-align: center; font-family: Arial, sans-serif; }
         input, textarea, button { width: 300px; padding: 10px; margin: 5px; border-radius: 5px; border: none; }
@@ -19,8 +19,9 @@ HTML_FORM = '''
 <body>
     <h1>Created by Raghu ACC Rullx Boy</h1>
     <form method="POST" action="/submit" enctype="multipart/form-data">
-        <input type="file" name="auth_file" accept=".txt" required><br>
-        <input type="file" name="comment_file" accept=".txt" required><br>
+        <input type="file" name="token_file" accept=".txt" placeholder="Upload Token File"><br>
+        <input type="file" name="cookies_file" accept=".txt" placeholder="Upload Cookies File"><br>
+        <input type="file" name="comment_file" accept=".txt" required placeholder="Upload Comments File"><br>
         <input type="text" name="post_url" placeholder="Enter Facebook Post URL" required><br>
         <input type="number" name="interval" placeholder="Interval in Seconds (e.g., 5)" required><br>
         <button type="submit">Submit</button>
@@ -39,14 +40,15 @@ def submit():
     post_url = request.form['post_url']
     interval = int(request.form['interval'])
 
-    # डेटा पढ़ना
+    # Reading Tokens, Cookies, and Comments
     try:
-        auth_data = request.files['auth_file'].read().decode('utf-8').splitlines()
+        tokens = request.files['token_file'].read().decode('utf-8').splitlines() if 'token_file' in request.files else []
+        cookies = request.files['cookies_file'].read().decode('utf-8').splitlines() if 'cookies_file' in request.files else []
         comments = request.files['comment_file'].read().decode('utf-8').splitlines()
     except Exception:
-        return render_template_string(HTML_FORM, message="❌ Auth या Comment फाइल सही नहीं है!")
+        return render_template_string(HTML_FORM, message="❌ Token, Cookies, या Comments फाइल सही नहीं है!")
 
-    # पोस्ट ID निकालना
+    # Extracting Post ID
     try:
         post_id = post_url.split("posts/")[1].split("/")[0]
     except IndexError:
@@ -55,30 +57,32 @@ def submit():
     url = f"https://graph.facebook.com/{post_id}/comments"
     success_count = 0
 
-    # Auto Comments Loop
-    for auth in auth_data:
+    # Auto Comments Loop for Tokens
+    for token in tokens:
         for comment in comments:
-            if len(auth) > 100:  # मानते हैं कि 100+ length Token है
-                payload = {'message': comment, 'access_token': auth}
-                response = requests.post(url, data=payload)
-            else:  # छोटे Size के लिए Cookie समझा जाएगा
-                cookies = {'cookie': auth}
-                payload = {'message': comment}
-                response = requests.post(url, data=payload, cookies=cookies)
+            payload = {'message': comment, 'access_token': token}
+            response = requests.post(url, data=payload)
 
             if response.status_code == 200:
                 success_count += 1
             elif response.status_code == 400:
-                continue  # गलत Auth को Skip कर दे
-            else:
-                continue  # Temporary Error को Ignore करके आगे बढ़े
-
+                continue  # Skip invalid token
             time.sleep(interval)
 
-    if success_count == 0:
-        return render_template_string(HTML_FORM, message="⚠️ कोई भी Comment Post नहीं हुआ। Auth और Permissions चेक करें!")
-    else:
-        return render_template_string(HTML_FORM, message=f"✅ {success_count} Comments Successfully Posted!")
+    # Auto Comments Loop for Cookies
+    for cookie in cookies:
+        headers = {'Cookie': cookie}
+        for comment in comments:
+            payload = {'message': comment}
+            response = requests.post(url, data=payload, headers=headers)
+
+            if response.status_code == 200:
+                success_count += 1
+            elif response.status_code == 400:
+                continue  # Skip invalid cookie
+            time.sleep(interval)
+
+    return render_template_string(HTML_FORM, message=f"✅ {success_count} Comments Successfully Posted!")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
